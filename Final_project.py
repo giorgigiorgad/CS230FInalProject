@@ -3,14 +3,13 @@ Name: Giorgi Giorgadze
 CS230: Section 005
 Data: Skyscrapers
 URL:
-Description: This program provides the data analysis of skyscrapers in the United States, by selecting the city you can see
-how many building are there, the year it was done, and more. You can see graph of the tallest buildings and map where the
-building are located.
+Description: This program provides the data analysis of skyscrapers in the United States. By selecting a city, you can see
+how many buildings are there, the year they were completed, and more. You can also view a graph of the tallest buildings
+and a map showing where the buildings are located.
 """
 
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
 import altair as alt
 import pydeck as pdk
 
@@ -30,7 +29,7 @@ else:
     city_list = sorted(df['location.city'].dropna().unique())
     # Ensure default values exist in the options
     default_cities = [city for city in ["Boston", "New York"] if city in city_list]
-    selected_cities = st.sidebar.multiselect("Select Cities", city_list, default=default_cities)  # Use valid default cities
+    selected_cities = st.sidebar.multiselect("Select Cities", city_list, default=default_cities)
 
     # Filter dataset based on selected cities
     if selected_cities:
@@ -47,6 +46,8 @@ else:
     if navigation == "Completed Skyscrapers":
         st.subheader(f"Completed Skyscrapers in {', '.join(selected_cities) if selected_cities else 'All Cities'}")
         st.dataframe(city_data)
+
+
 
 
     elif navigation == "Tallest Skyscrapers":
@@ -66,16 +67,6 @@ else:
 
             def calculate_average_heights(data):
 
-                """
-
-                Calculate the average height of skyscrapers for each selected city.
-
-                :param data: DataFrame containing skyscraper data
-
-                :return: DataFrame with city and their average heights
-
-                """
-
                 avg_heights = data.groupby('location.city')['statistics.height'].mean().reset_index()
 
                 avg_heights.columns = ['City', 'Average Height (m)']
@@ -90,50 +81,70 @@ else:
             # Interactive slider for top skyscrapers
 
             top_n = st.slider("Select the number of top skyscrapers to display", min_value=1, max_value=len(city_data),
+
                               value=5)
 
             top_skyscrapers = city_data.nlargest(top_n, 'statistics.height')
 
             st.write(
-                f"Top {top_n} tallest skyscrapers in {', '.join(selected_cities) if selected_cities else 'All Cities'}:")
+
+                f"Top {top_n} tallest skyscrapers in {', '.join(selected_cities) if selected_cities else 'All Cities'}:"
+
+            )
 
             st.dataframe(top_skyscrapers[['name', 'location.city', 'statistics.height']].reset_index(drop=True))
 
-            # Horizontal Bar Chart with Matplotlib
+            # Horizontal Bar Chart with Altair (green line and height on horizontal axis)
 
-            fig, ax = plt.subplots(figsize=(8, 6))
+            bar_chart = alt.Chart(top_skyscrapers).mark_bar(color='green').encode(
 
-            ax.barh(top_skyscrapers['name'], top_skyscrapers['statistics.height'], color='green')
+                x=alt.X('statistics.height:Q', title='Height (m)'),
 
-            ax.set_xlabel("Height (m)", fontsize=12)
+                y=alt.Y('name:N', sort='-x', title='Building Name'),
 
-            ax.set_ylabel("Building Name", fontsize=12)
+                tooltip=[
 
-            ax.set_title(
-                f"Top {top_n} Tallest Skyscrapers in {', '.join(selected_cities) if selected_cities else 'All Cities'}",
-                fontsize=14)
+                    alt.Tooltip('name:N', title='Building Name'),
 
-            ax.invert_yaxis()  # To display the tallest building at the top
+                    alt.Tooltip('statistics.height:Q', title='Height (m)', format='.2f')
 
-            st.pyplot(fig)
+                ]
+
+            ).properties(
+
+                title=f"Top {top_n} Tallest Skyscrapers in {', '.join(selected_cities) if selected_cities else 'All Cities'}",
+
+                width=600,  # Set the width of the chart
+
+                height=400  # Set the height of the chart
+
+            )
+
+            st.altair_chart(bar_chart, use_container_width=True)
 
             # Display the average heights as a separate graph for comparison
 
             st.write("### Average Heights of Skyscrapers by City")
 
-            fig, ax = plt.subplots(figsize=(8, 6))
+            avg_chart = alt.Chart(average_heights).mark_bar(color='green').encode(
 
-            ax.bar(average_heights['City'], average_heights['Average Height (m)'], color='green')
+                x=alt.X('City:N', sort='-y', title='City'),
 
-            ax.set_xlabel("City", fontsize=12)
+                y=alt.Y('Average Height (m):Q', title='Average Height (m)'),
 
-            ax.set_ylabel("Average Height (m)", fontsize=12)
+                tooltip=['City:N', 'Average Height (m):Q']
 
-            ax.set_title("Comparison of Average Heights Across Selected Cities", fontsize=14)
+            ).properties(
 
-            plt.xticks(rotation=45)
+                title="Comparison of Average Heights Across Selected Cities",
 
-            st.pyplot(fig)
+                width=600,  # Set the width of the chart
+
+                height=400  # Set the height of the chart
+
+            )
+
+            st.altair_chart(avg_chart, use_container_width=True)
 
 
         else:
@@ -176,30 +187,58 @@ else:
             st.write("No skyscrapers found for the selected cities.")
 
 
+
     elif navigation == "Skyscraper Distribution":
+
         st.subheader(f"Skyscraper Distribution: {', '.join(selected_cities) if selected_cities else 'All Cities'}")
 
         if not city_data.empty:
+
             # Group data by city and count the number of skyscrapers
+
             distribution_data = city_data['location.city'].value_counts().reset_index()
+
             distribution_data.columns = ['City', 'Count']
 
-            # Pie Chart with Matplotlib
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.pie(
-                distribution_data['Count'],
-                labels=distribution_data['City'],
-                autopct='%1.2f%%',
-                startangle=90,
-                colors=plt.cm.tab10.colors  # Use a preset color palette
-            )
-            ax.set_title(f"Skyscraper Distribution: {', '.join(selected_cities) if selected_cities else 'All Cities'}",
-                         fontsize=14)
+            # Calculate percentages
 
-            st.pyplot(fig)
+            distribution_data['Percentage'] = (distribution_data['Count'] / distribution_data['Count'].sum()) * 100
+
+            # Pie Chart with Altair
+
+            pie_chart = alt.Chart(distribution_data).mark_arc().encode(
+
+                theta=alt.Theta(field="Count", type="quantitative"),
+
+                color=alt.Color(field="City", type="nominal"),
+
+                tooltip=[
+
+                    alt.Tooltip('City:N', title='City'),
+
+                    alt.Tooltip('Count:Q', title='Count'),
+
+                    alt.Tooltip('Percentage:Q', title='Percentage', format='.2f')
+                    # Display percentage with 2 decimal places
+
+                ]
+
+            ).properties(
+
+                title=f"Skyscraper Distribution: {', '.join(selected_cities) if selected_cities else 'All Cities'}"
+
+            )
+
+            st.altair_chart(pie_chart, use_container_width=True)
 
             # Display the raw data for transparency
-            st.write("Skyscraper Counts by City:")
+
+            st.write("Skyscraper Counts and Percentages by City:")
+
             st.dataframe(distribution_data)
+
+
         else:
+
             st.write("No skyscrapers found for the selected cities.")
+
